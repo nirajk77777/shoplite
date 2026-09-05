@@ -32,12 +32,53 @@ async function pollUntil<T>(
   timeoutMs = 25_000,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
   while (Date.now() < deadline) {
-    const result = await attempt().catch(() => undefined);
-    if (result !== undefined) return result;
+    try {
+      const result = await attempt();
+      if (result !== undefined) return result;
+    } catch (error) {
+      lastError = error;
+    }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error(`Timed out waiting for ${what}`);
+  const detail = lastError ? ` (last error: ${String(lastError)})` : "";
+  throw new Error(`Timed out waiting for ${what}${detail}`);
+}
+
+function post(path: string, body: unknown): Promise<Response> {
+  return fetch(`${api}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** The single sample of an instant Prometheus query, or undefined when there is no series yet. */
+async function promSample(query: string): Promise<number | undefined> {
+  const url = new URL(`${prometheusUrl}/api/v1/query`);
+  url.searchParams.set("query", query);
+  const body = (await (await fetch(url)).json()) as {
+    data: { result: Array<{ value: [number, string] }> };
+  };
+  const sample = body.data.result[0]?.value[1];
+  return sample === undefined ? undefined : Number(sample);
+}
+
+type TempoSpan = {
+  name: string;
+  attributes?: Array<{ key: string; value: { stringValue?: string; intValue?: string } }>;
+};
+
+type TempoTrace = { batches: Array<{ scopeSpans: Array<{ spans: TempoSpan[] }> }> };
+
+function spansOf(trace: TempoTrace): TempoSpan[] {
+  return trace.batches.flatMap((batch) => batch.scopeSpans.flatMap((scope) => scope.spans));
+}
+
+function attribute(span: TempoSpan, key: string): string | undefined {
+  const value = span.attributes?.find((entry) => entry.key === key)?.value;
+  return value?.stringValue ?? value?.intValue;
 }
 
 describe("ShopLite telemetry", () => {
@@ -94,31 +135,25 @@ describe("ShopLite telemetry", () => {
   });
 
   it("makes a declined checkout findable in Tempo, Loki, and Prometheus by its trace id", async () => {
-    await fetch(`${api}/customers/${ava.id}/cart/items`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ productId: mug.id }),
-    });
-    await fetch(`${api}/customers/${ava.id}/cart/discount`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ code: "SALE10" }),
-    });
-    const checkout = await fetch(`${api}/customers/${ava.id}/checkout`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ card: declinedCard }),
-    });
+    await post(`/customers/${ava.id}/cart/items`, { productId: mug.id });
+    await post(`/customers/${ava.id}/cart/discount`, { code: "SALE10" });
+    const checkout = await post(`/customers/${ava.id}/checkout`, { card: declinedCard });
     expect(checkout.status).toBe(402);
     const traceId = checkout.headers.get("x-trace-id");
     expect(traceId).toMatch(/^[0-9a-f]{32}$/);
 
-    // Tempo: the trace exists and its server span carries the route.
-    const trace = await pollUntil("trace in Tempo", async () => {
+    // Tempo: the trace exists, its server span carries the route and the 402.
+    const spans = await pollUntil("trace in Tempo", async () => {
       const response = await fetch(`${tempoUrl}/api/traces/${traceId}`);
-      return response.ok ? JSON.stringify(await response.json()) : undefined;
+      return response.ok ? spansOf((await response.json()) as TempoTrace) : undefined;
     });
-    expect(trace).toContain("/customers/:customerId/checkout");
+    const serverSpan = spans.find((span) => attribute(span, "http.route") !== undefined);
+    expect(serverSpan).toBeDefined();
+    expect(serverSpan?.name).toBe("POST /customers/:customerId/checkout");
+    expect(serverSpan && attribute(serverSpan, "http.route")).toBe(
+      "/customers/:customerId/checkout",
+    );
+    expect(serverSpan && attribute(serverSpan, "http.response.status_code")).toBe("402");
 
     // Loki: the decline log line carries the same trace id, and the reason is in the
     // line itself and in the structured fields pino attached.
@@ -140,43 +175,19 @@ describe("ShopLite telemetry", () => {
     expect(JSON.stringify(streams)).not.toContain(declinedCard.number);
 
     // Prometheus: the checkout error counter for this process shows one decline.
-    const errors = await pollUntil("checkout_errors_total in Prometheus", async () => {
-      const url = new URL(`${prometheusUrl}/api/v1/query`);
-      url.searchParams.set(
-        "query",
-        `checkout_errors_total{instance="${instanceId}",reason="declined"}`,
-      );
-      const body = (await (await fetch(url)).json()) as {
-        data: { result: Array<{ value: [number, string] }> };
-      };
-      const sample = body.data.result[0]?.value[1];
-      return sample === undefined ? undefined : Number(sample);
-    });
+    const errors = await pollUntil("checkout_errors_total in Prometheus", () =>
+      promSample(`checkout_errors_total{instance="${instanceId}",reason="declined"}`),
+    );
     expect(errors).toBe(1);
 
-    const attempts = await pollUntil("checkout_total in Prometheus", async () => {
-      const url = new URL(`${prometheusUrl}/api/v1/query`);
-      url.searchParams.set("query", `checkout_total{instance="${instanceId}"}`);
-      const body = (await (await fetch(url)).json()) as {
-        data: { result: Array<{ value: [number, string] }> };
-      };
-      const sample = body.data.result[0]?.value[1];
-      return sample === undefined ? undefined : Number(sample);
-    });
+    const attempts = await pollUntil("checkout_total in Prometheus", () =>
+      promSample(`checkout_total{instance="${instanceId}"}`),
+    );
     expect(attempts).toBe(1);
 
-    const discounts = await pollUntil("discount_applied_total in Prometheus", async () => {
-      const url = new URL(`${prometheusUrl}/api/v1/query`);
-      url.searchParams.set(
-        "query",
-        `discount_applied_total{instance="${instanceId}",code="SALE10"}`,
-      );
-      const body = (await (await fetch(url)).json()) as {
-        data: { result: Array<{ value: [number, string] }> };
-      };
-      const sample = body.data.result[0]?.value[1];
-      return sample === undefined ? undefined : Number(sample);
-    });
+    const discounts = await pollUntil("discount_applied_total in Prometheus", () =>
+      promSample(`discount_applied_total{instance="${instanceId}",code="SALE10"}`),
+    );
     expect(discounts).toBe(1);
   });
 });

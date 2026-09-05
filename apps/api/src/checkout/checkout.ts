@@ -5,7 +5,7 @@ import type { Db } from "../db/client";
 import { carts, orders, payments } from "../db/schema";
 import { finalizeOrder, type OrderDraft } from "../domain/order";
 import { cardLast4, type PaymentGateway } from "../payments/mock-gateway";
-import { checkoutAttempts, checkoutErrors } from "../telemetry/metrics";
+import { checkoutAttempts, recordCheckoutError } from "../telemetry/metrics";
 
 export type Card = { number: string; expMonth: number; expYear: number };
 
@@ -28,10 +28,24 @@ export async function checkout(
   input: { customerId: string; card: Card },
 ): Promise<CheckoutResult> {
   checkoutAttempts.add(1);
+  try {
+    return await runCheckout(db, gateway, log, input);
+  } catch (error) {
+    recordCheckoutError("error");
+    throw error;
+  }
+}
+
+async function runCheckout(
+  db: Db,
+  gateway: PaymentGateway,
+  log: FastifyBaseLogger,
+  input: { customerId: string; card: Card },
+): Promise<CheckoutResult> {
   const cart = await openCartFor(db, input.customerId);
   const lines = await loadLines(db, cart.id);
   if (lines.length === 0) {
-    checkoutErrors.add(1, { reason: "empty_cart" });
+    recordCheckoutError("empty_cart");
     return { status: "empty_cart" };
   }
 
@@ -68,7 +82,7 @@ export async function checkout(
       },
       `payment declined by gateway: ${charge.declineCode}`,
     );
-    checkoutErrors.add(1, { reason: "declined" });
+    recordCheckoutError("declined");
     return { status: "declined" };
   }
 

@@ -60,8 +60,8 @@ const sdk = new NodeSDK({
 
 sdk.start();
 
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => {
+for (const exitSignal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(exitSignal, () => {
     void sdk.shutdown();
   });
 }

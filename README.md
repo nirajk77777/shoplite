@@ -99,7 +99,7 @@ Business counters, defined in `src/telemetry/metrics.ts`:
 | Counter | Labels | Incremented when |
 |---------|--------|------------------|
 | `checkout_total` | | a checkout request reaches the checkout flow |
-| `checkout_errors_total` | `reason` = `declined`, `empty_cart` | a checkout does not produce an order |
+| `checkout_errors_total` | `reason` = `declined`, `empty_cart`, `error` | a checkout does not produce an order (`error` is a thrown exception, so a 500) |
 | `discount_applied_total` | `code` | a discount code is attached to a cart |
 
 A declined card therefore shows up three ways: a trace whose server span is `POST /customers/:customerId/checkout` with status 402, a warn log line `payment declined by gateway: insufficient_funds` with the same trace id and `declineCode` as a field, and `checkout_errors_total{reason="declined"}` going up. The incident-resolver repository provisions a Grafana dashboard for all of this at `http://localhost:3000/d/shoplite`.
