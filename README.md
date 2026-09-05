@@ -2,7 +2,7 @@
 
 A small e-commerce API built as the product that [Incident Resolver](https://github.com/nirajk77777/incident-resolver) investigates. Customers are picked from seed data, add products to a cart, apply a discount code, and check out through the HTTP API against a mock payment gateway. Fix pull requests from the agent target this repository.
 
-Stack: TypeScript, Node 22, pnpm workspaces, Fastify, Drizzle, Postgres, vitest, Biome.
+Stack: TypeScript, Node 22, pnpm workspaces, Fastify, Drizzle, Postgres, OpenTelemetry, vitest, Biome.
 
 ## Layout
 
@@ -14,6 +14,7 @@ apps/api/
   src/checkout/    checkout flow: price, charge, write order and payment
   src/routes/      thin Fastify handlers
   src/db/          Drizzle schema, client, migrator, seed
+  src/telemetry/   OpenTelemetry SDK setup (loaded with --import) and business metric counters
   drizzle/         SQL migrations
 ```
 
@@ -28,6 +29,9 @@ ShopLite has no compose file. It connects to the Postgres and the OTLP collector
 | `PORT` | `4000` | API port. |
 | `HOST` | `0.0.0.0` | API bind address. |
 | `LOG_LEVEL` | `info` | pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`. |
+| `OTEL_SERVICE_NAME` | `shoplite-api` | Service name on every trace, metric, and log. |
+
+The standard `OTEL_*` variables also apply, for example `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BLRP_SCHEDULE_DELAY`, and `OTEL_METRIC_EXPORT_INTERVAL`.
 
 ## Run it
 
@@ -78,11 +82,35 @@ Test cards: any well-formed number is approved; a number ending in `0002` (for e
 
 Discount codes in the seed: `SALE10` (10% off), `FLAT5` ($5 off orders of $20 or more), `EXPIRED20` (inactive, rejected).
 
+## Telemetry
+
+`pnpm dev` and `pnpm start` load `apps/api/src/telemetry/instrumentation.ts` through `tsx --import` before the application, so the OpenTelemetry module hook is in place when Fastify, `pg`, and pino are imported. Everything is exported over OTLP HTTP to `OTEL_EXPORTER_OTLP_ENDPOINT`, where the LGTM collector fans it out:
+
+| Signal | How | Where it lands |
+|--------|-----|----------------|
+| Traces | `@opentelemetry/instrumentation-http`, `@fastify/otel` (route spans, `http.route`), `instrumentation-pg`, `instrumentation-undici` | Tempo. `GET :3200/api/traces/<traceId>` |
+| Logs | pino lines bridged through the OTel logs API by `instrumentation-pino`, which also stamps `trace_id` and `span_id` on each line | Loki. `{service_name="shoplite-api"} \| trace_id="<traceId>"` |
+| Metrics | `http.server.request.duration` histogram (stable HTTP semantic conventions) plus the counters below | Prometheus, via its OTLP receiver, with `job="shoplite-api"` |
+
+Every response carries `x-trace-id`. Paste it into Tempo or the Loki query above to see the exact request.
+
+Business counters, defined in `src/telemetry/metrics.ts`:
+
+| Counter | Labels | Incremented when |
+|---------|--------|------------------|
+| `checkout_total` | | a checkout request reaches the checkout flow |
+| `checkout_errors_total` | `reason` = `declined`, `empty_cart` | a checkout does not produce an order |
+| `discount_applied_total` | `code` | a discount code is attached to a cart |
+
+A declined card therefore shows up three ways: a trace whose server span is `POST /customers/:customerId/checkout` with status 402, a warn log line `payment declined by gateway: insufficient_funds` with the same trace id and `declineCode` as a field, and `checkout_errors_total{reason="declined"}` going up. The incident-resolver repository provisions a Grafana dashboard for all of this at `http://localhost:3000/d/shoplite`.
+
 ## Tests
 
 ```bash
 pnpm test               # unit tests: domain module and mock gateway. No database, no network
-pnpm test:integration   # API tests through Fastify inject against the compose Postgres
+pnpm test:integration   # API tests through Fastify inject against the compose Postgres, and a telemetry
+                        # test that starts the instrumented server and looks for one declined checkout
+                        # in Tempo, Loki, and Prometheus
 pnpm test:all
 pnpm typecheck
 pnpm lint

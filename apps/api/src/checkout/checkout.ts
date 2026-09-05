@@ -5,6 +5,7 @@ import type { Db } from "../db/client";
 import { carts, orders, payments } from "../db/schema";
 import { finalizeOrder, type OrderDraft } from "../domain/order";
 import { cardLast4, type PaymentGateway } from "../payments/mock-gateway";
+import { checkoutAttempts, checkoutErrors } from "../telemetry/metrics";
 
 export type Card = { number: string; expMonth: number; expYear: number };
 
@@ -26,9 +27,13 @@ export async function checkout(
   log: FastifyBaseLogger,
   input: { customerId: string; card: Card },
 ): Promise<CheckoutResult> {
+  checkoutAttempts.add(1);
   const cart = await openCartFor(db, input.customerId);
   const lines = await loadLines(db, cart.id);
-  if (lines.length === 0) return { status: "empty_cart" };
+  if (lines.length === 0) {
+    checkoutErrors.add(1, { reason: "empty_cart" });
+    return { status: "empty_cart" };
+  }
 
   const discount = await loadDiscount(db, cart.discountCode);
   const draft = finalizeOrder(lines, discount);
@@ -61,8 +66,9 @@ export async function checkout(
         declineCode: charge.declineCode,
         declineMessage: charge.message,
       },
-      "payment declined by gateway",
+      `payment declined by gateway: ${charge.declineCode}`,
     );
+    checkoutErrors.add(1, { reason: "declined" });
     return { status: "declined" };
   }
 

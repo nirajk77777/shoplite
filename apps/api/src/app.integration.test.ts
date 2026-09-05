@@ -194,7 +194,7 @@ describe("ShopLite API", () => {
 
     const declineLog = logLines.map((line) => JSON.parse(line)).find((entry) => entry.declineCode);
     expect(declineLog).toMatchObject({
-      msg: "payment declined by gateway",
+      msg: "payment declined by gateway: insufficient_funds",
       declineCode: "insufficient_funds",
       cardLast4: "0002",
     });

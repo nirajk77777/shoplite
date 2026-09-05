@@ -3,6 +3,7 @@ import type { Db } from "../db/client";
 import { cartItems, carts, cartTotals, discountCodes, products } from "../db/schema";
 import { type CartLine, type CartTotals, calculateCartTotals, lineTotal } from "../domain/cart";
 import type { DiscountCode } from "../domain/discount";
+import { discountApplications } from "../telemetry/metrics";
 
 export type OpenCart = { id: string; customerId: string; discountCode: string | null };
 
@@ -161,6 +162,7 @@ export async function setDiscount(
     .set({ discountCode: code, updatedAt: new Date() })
     .where(eq(carts.id, cart.id));
   await refreshTotals(db, { ...cart, discountCode: code });
+  discountApplications.add(1, { code });
   return "ok";
 }
 
