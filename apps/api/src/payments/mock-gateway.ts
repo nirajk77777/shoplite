@@ -20,10 +20,10 @@ export type PaymentGateway = {
 
 /** The last four digits, for storing on the payment row instead of the card number. */
 export function cardLast4(cardNumber: string): string {
-  return digitsOf(cardNumber).slice(-4);
+  return withoutSpaces(cardNumber).slice(-4);
 }
 
-function digitsOf(cardNumber: string): string {
+function withoutSpaces(cardNumber: string): string {
   return cardNumber.replace(/\s+/g, "");
 }
 
@@ -35,7 +35,7 @@ function digitsOf(cardNumber: string): string {
 export function createMockGateway(): PaymentGateway {
   return {
     async charge(request) {
-      const digits = digitsOf(request.cardNumber);
+      const digits = withoutSpaces(request.cardNumber);
       if (!/^\d{13,19}$/.test(digits)) {
         return {
           status: "declined",

@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 import { loadDiscount, loadLines, type OpenCart, openCartFor } from "../carts/cart-store";
 import type { Db } from "../db/client";
 import { carts, orders, payments } from "../db/schema";
-import { finalizeOrder } from "../domain/order";
+import { finalizeOrder, type OrderDraft } from "../domain/order";
 import { cardLast4, type PaymentGateway } from "../payments/mock-gateway";
 
 export type Card = { number: string; expMonth: number; expYear: number };
@@ -79,10 +79,19 @@ export async function checkout(
   return { status: "paid", order };
 }
 
+/** The customer's orders, newest first. */
+export async function listOrdersFor(db: Db, customerId: string): Promise<Order[]> {
+  return db
+    .select()
+    .from(orders)
+    .where(eq(orders.customerId, customerId))
+    .orderBy(desc(orders.createdAt));
+}
+
 async function writeOrder(
   db: Db,
   cart: OpenCart,
-  draft: ReturnType<typeof finalizeOrder>,
+  draft: OrderDraft,
   last4: string,
   gatewayReference: string,
 ): Promise<Order> {

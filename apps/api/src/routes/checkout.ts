@@ -1,9 +1,7 @@
-import { desc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";
-import { checkout } from "../checkout/checkout";
-import { orders } from "../db/schema";
+import { checkout, listOrdersFor } from "../checkout/checkout";
 import { parseBody } from "../http/body";
 import { type CustomerParams, requireCustomer } from "../http/customer-param";
 
@@ -46,10 +44,6 @@ export async function checkoutRoutes(
   app.get<{ Params: CustomerParams }>("/customers/:customerId/orders", async (request, reply) => {
     const customer = await requireCustomer(db, request, reply);
     if (!customer) return;
-    return db
-      .select()
-      .from(orders)
-      .where(eq(orders.customerId, customer.id))
-      .orderBy(desc(orders.createdAt));
+    return listOrdersFor(db, customer.id);
   });
 }
