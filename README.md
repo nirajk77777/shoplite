@@ -50,11 +50,12 @@ The standard `OTEL_*` variables also apply, for example `OTEL_RESOURCE_ATTRIBUTE
 Requires Node 22 (see `.nvmrc`), pnpm 10, and the incident-resolver compose stack running.
 
 ```bash
-pnpm install
-pnpm db:migrate        # creates the shoplite schema tables
-pnpm db:seed           # five customers, eight products, three discount codes. Safe to rerun; it resets the tables
+pnpm setup             # install, create the shoplite schema tables, and seed them
 pnpm dev               # API on http://localhost:4000, storefront on http://localhost:4001
 ```
+
+`pnpm setup` is `pnpm install`, then `pnpm db:migrate`, then `pnpm db:seed` — five customers,
+eight products, three discount codes. The seed is safe to rerun on its own; it resets the tables.
 
 ## Storefront
 

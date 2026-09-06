@@ -9,6 +9,7 @@
     "pnpm": ">=10"
   },
   "scripts": {
+    "setup": "pnpm install && pnpm db:migrate && pnpm db:seed",
     "dev": "pnpm -r --parallel --if-present dev",
     "db:migrate": "pnpm --filter @shoplite/api db:migrate",
     "db:seed": "pnpm --filter @shoplite/api db:seed",
