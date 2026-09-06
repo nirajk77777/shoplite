@@ -57,7 +57,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       .getCart(customerId)
       .then((next) => replace(customerId, next))
       .catch((error: unknown) => {
-        if (currentCustomerId.current === customerId) showError(error, "Could not load your cart");
+        if (currentCustomerId.current === customerId) {
+          showError(error, { title: "Could not load your cart", doing: "opening my cart" });
+        }
       });
   }, [api, customerId, replace, showError]);
 

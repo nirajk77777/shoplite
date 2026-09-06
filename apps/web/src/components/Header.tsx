@@ -20,6 +20,7 @@ export function Header() {
             Shop
           </NavLink>
           <NavLink to="/cart">Cart</NavLink>
+          <NavLink to="/tickets">My tickets</NavLink>
         </nav>
 
         <div className="masthead__right">

@@ -1,5 +1,7 @@
 // Shapes mirror what apps/api returns. Prices are integers in cents.
 
+import { createCall } from "./json";
+
 export type Customer = { id: string; email: string; name: string };
 
 export type Product = {
@@ -84,22 +86,16 @@ export type ApiOptions = {
 };
 
 export function createApi({ fetchImpl = fetch, baseUrl = "/api" }: ApiOptions = {}): ShopLiteApi {
-  async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      method,
-      headers: body === undefined ? {} : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new ApiError(
-        errorMessage(payload) ?? `Request failed (${response.status})`,
-        response.status,
+  const call = createCall({
+    fetchImpl,
+    baseUrl,
+    failed: ({ message, status, response }) =>
+      new ApiError(
+        message ?? `Request failed (${status})`,
+        status,
         response.headers.get("x-trace-id"),
-      );
-    }
-    return payload as T;
-  }
+      ),
+  });
 
   const customer = (id: string) => `/customers/${id}`;
 
@@ -117,12 +113,4 @@ export function createApi({ fetchImpl = fetch, baseUrl = "/api" }: ApiOptions = 
       return order;
     },
   };
-}
-
-function errorMessage(payload: unknown): string | undefined {
-  if (payload && typeof payload === "object" && "error" in payload) {
-    const { error } = payload as { error: unknown };
-    if (typeof error === "string") return error;
-  }
-  return undefined;
 }

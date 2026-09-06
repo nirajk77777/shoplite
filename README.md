@@ -17,11 +17,12 @@ apps/api/
   src/telemetry/   OpenTelemetry SDK setup (loaded with --import) and business metric counters
   drizzle/         SQL migrations
 apps/web/
-  src/api/         typed client over fetch; a failed request becomes an ApiError carrying the trace id
-  src/app/         providers: API, signed-in customer, cart, toasts; the useLoad hook
+  src/api/         one JSON caller and the two clients over it: the store's own API, whose failures
+                   become an ApiError carrying the trace id, and the Incident Resolver portal
+  src/app/         providers: API, portal, signed-in customer, cart, toasts; the useLoad hook
   src/components/  header with the cart tag, line list, receipt, toasts, product image
-  src/pages/       catalog, cart, checkout
-  src/lib/         money and item-count formatting
+  src/pages/       catalog, cart, checkout, my tickets
+  src/lib/         money and item-count formatting; Tickets in the customer's words
   src/test/        vitest setup for the jsdom project
   public/images/   product illustrations the seed's imageUrl values point at
 ```
@@ -40,6 +41,7 @@ ShopLite has no compose file. It connects to the Postgres and the OTLP collector
 | `OTEL_SERVICE_NAME` | `shoplite-api` | Service name on every trace, metric, and log. |
 | `WEB_PORT` | `4001` | Storefront dev server port. |
 | `SHOPLITE_API_URL` | `http://localhost:4000` | Where the storefront dev server forwards `/api/*` requests. |
+| `PORTAL_API_URL` | `http://localhost:5000` | Where the storefront dev server forwards `/portal/*` requests: the Incident Resolver portal API. |
 
 The standard `OTEL_*` variables also apply, for example `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BLRP_SCHEDULE_DELAY`, and `OTEL_METRIC_EXPORT_INTERVAL`.
 
@@ -56,14 +58,24 @@ pnpm dev               # API on http://localhost:4000, storefront on http://loca
 
 ## Storefront
 
-`apps/web` is a Vite and React app on port 4001 with three pages: the catalog, the cart, and checkout. There is no authentication: a "Signed in as" picker in the header chooses one of the seeded customers, and the choice is remembered in the browser.
+`apps/web` is a Vite and React app on port 4001 with four pages: the catalog, the cart, checkout, and "My tickets". There is no authentication: a "Signed in as" picker in the header chooses one of the seeded customers, and the choice is remembered in the browser.
 
-The browser calls `/api/...` and the dev server proxies that to the API, so the `x-trace-id` response header arrives unchanged and the API needs no CORS.
+The browser calls `/api/...` and the dev server proxies that to the API, so the `x-trace-id` response header arrives unchanged and the API needs no CORS. `/portal/...` is proxied the same way to the Incident Resolver portal API (`PORTAL_API_URL`, 5000 by default), which is the only other service the storefront talks to.
 
 Two things are deliberate:
 
 - The cart tag in the header shows the count and total the API reads from the `cart_totals` row. It never sums the lines, so when that row goes stale after removing an item, the tag shows the wrong number while the cart page shows the right lines. That is how a tester notices the stale total bug.
 - A failed checkout shows a toast with the API's own message (`Checkout failed`, nothing about the card) and the trace id from the response header as a reference the customer can quote. Paste it into Tempo or Loki as described under Telemetry to see the request.
+
+### Reporting a problem
+
+Every error toast carries a **Report a problem** button. Pressing it opens a customer Ticket in the portal with the signed-in customer's email, the trace id of the request that failed, and what they were doing in their own words — "I was paying for my cart on the checkout page when the store showed \"Checkout failed\"." — so nothing has to be retyped and the agent can jump straight to the trace. The toast then becomes the confirmation, with a link to My tickets.
+
+**My tickets** (`/tickets`) lists that customer's Tickets, how far along each one is, and the Reply once the agent has written it. It re-reads the portal every few seconds while anything is still open and stops once everything has closed. Delivery of the Reply is this page: the portal's email step is a stub that logs.
+
+The whole loop needs the portal running (`pnpm portal` in the incident-resolver repository). Without it the button says support could not be reached, inside the toast, and My tickets says the same on the page while it keeps trying; the rest of the store is unaffected.
+
+Both `/api` and `/portal` are dev-server proxies, so `pnpm dev` is what the storefront is built to run under. A `pnpm preview` build has neither proxy, and neither service sends CORS headers, so a previewed build reaches nothing.
 
 ## Checkout with curl
 

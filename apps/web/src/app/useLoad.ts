@@ -19,7 +19,7 @@ export function useLoad<T>(load: (() => Promise<T>) | null, failTitle: string): 
         if (!cancelled) setData(result);
       })
       .catch((error: unknown) => {
-        if (!cancelled) showError(error, failTitle);
+        if (!cancelled) showError(error, { title: failTitle });
       });
     return () => {
       cancelled = true;

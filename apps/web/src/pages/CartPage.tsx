@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { useCart } from "../app/CartContext";
-import { useToasts } from "../app/ToastContext";
+import { type ErrorContext, useToasts } from "../app/ToastContext";
 import { LineList } from "../components/LineList";
 import { Receipt } from "../components/Receipt";
 
@@ -20,12 +20,12 @@ export function CartPage() {
     );
   }
 
-  async function run(key: string, work: () => Promise<void>, failTitle: string) {
+  async function run(key: string, work: () => Promise<void>, about: ErrorContext) {
     setBusy((current) => new Set(current).add(key));
     try {
       await work();
     } catch (error) {
-      showError(error, failTitle);
+      showError(error, about);
     } finally {
       setBusy((current) => {
         const next = new Set(current);
@@ -46,7 +46,7 @@ export function CartPage() {
         setCode("");
         notify({ tone: "success", title: `Code ${trimmed.toUpperCase()} applied` });
       },
-      "Could not apply code",
+      { title: "Could not apply code", doing: `applying the discount code ${trimmed}` },
     );
   }
 
@@ -67,7 +67,10 @@ export function CartPage() {
             items={cart.items}
             busyIds={busy}
             onRemove={(productId) =>
-              run(productId, () => removeItem(productId), "Could not remove item")
+              run(productId, () => removeItem(productId), {
+                title: "Could not remove item",
+                doing: "removing an item",
+              })
             }
           />
 
@@ -100,7 +103,12 @@ export function CartPage() {
                     type="button"
                     className="link-button"
                     disabled={busy.has("clear")}
-                    onClick={() => run("clear", clearDiscount, "Could not remove code")}
+                    onClick={() =>
+                      run("clear", clearDiscount, {
+                        title: "Could not remove code",
+                        doing: "removing the discount code",
+                      })
+                    }
                   >
                     Remove code
                   </button>

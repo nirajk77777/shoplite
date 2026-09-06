@@ -20,7 +20,10 @@ export function CatalogPage() {
       await addItem(product.id);
       notify({ tone: "success", title: `${product.name} added to cart` });
     } catch (error) {
-      showError(error, "Could not add to cart");
+      showError(error, {
+        title: "Could not add to cart",
+        doing: `adding ${product.name} to my cart`,
+      });
     } finally {
       setBusyIds((current) => {
         const next = new Set(current);

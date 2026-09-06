@@ -49,7 +49,7 @@ export function CheckoutPage() {
     try {
       setPlaced(await checkout({ ...card, number: card.number.trim() }));
     } catch (error) {
-      showError(error, "Checkout failed");
+      showError(error, { title: "Checkout failed", doing: "paying for my cart" });
     } finally {
       setPaying(false);
     }
