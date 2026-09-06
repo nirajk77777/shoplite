@@ -42,27 +42,38 @@ export async function demoRoutes(app: FastifyInstance, { db }: AppDeps): Promise
   app.post("/demo/simulate-traffic", async (request, reply) => {
     const body = await parseBody(trafficRequestSchema, request.body ?? {}, reply);
     if (!body) return;
+    // Claimed before the first await, so two clicks arriving together cannot both get past
+    // the check and send twice the traffic. Every path out from here releases it.
     if (running) {
       return reply.code(409).send({ error: "Traffic is already being simulated" });
     }
-
-    const customerId = body.customerId ?? trafficCustomer.id;
-    const [customer] = await db.select().from(customers).where(eq(customers.id, customerId));
-    if (!customer) return reply.code(404).send({ error: "Customer not found" });
-
-    // Every checkout in the burst has to be an empty-cart checkout, so the cart is emptied
-    // first rather than assumed empty: a rehearsal that left something in it would send
-    // paid orders instead of the spike.
-    await emptyCart(db, await openCartFor(db, customer.id));
-
-    const plan = planTraffic(body);
     const controller = new AbortController();
     running = controller;
-    void run(plan, customer.id, `${request.protocol}://${request.host}`, controller).finally(() => {
-      if (running === controller) running = undefined;
-    });
 
-    return reply.code(202).send({ customerId: customer.id, ...plan });
+    try {
+      const customerId = body.customerId ?? trafficCustomer.id;
+      const [customer] = await db.select().from(customers).where(eq(customers.id, customerId));
+      if (!customer) {
+        running = undefined;
+        return reply.code(404).send({ error: "Customer not found" });
+      }
+
+      // Every checkout in the burst has to be an empty-cart checkout, so the cart is emptied
+      // first rather than assumed empty: a rehearsal that left something in it would send
+      // paid orders instead of the spike.
+      await emptyCart(db, await openCartFor(db, customer.id));
+
+      const plan = planTraffic(body);
+      const origin = `${request.protocol}://${request.host}`;
+      void run(plan, customer.id, origin, controller).finally(() => {
+        if (running === controller) running = undefined;
+      });
+
+      return reply.code(202).send({ customerId: customer.id, ...plan });
+    } catch (error) {
+      if (running === controller) running = undefined;
+      throw error;
+    }
   });
 
   async function run(
@@ -86,12 +97,18 @@ export async function demoRoutes(app: FastifyInstance, { db }: AppDeps): Promise
         await response.arrayBuffer();
       },
       wait: (ms) =>
-        new Promise((resolve) => {
-          const timer = setTimeout(resolve, ms);
-          controller.signal.addEventListener("abort", () => {
+        new Promise<void>((resolve) => {
+          const timer = setTimeout(() => {
+            controller.signal.removeEventListener("abort", stop);
+            resolve();
+          }, ms);
+          // Removed on the way out: a burst waits once per request, and a listener left
+          // behind each time would be a hundred of them on one signal.
+          function stop() {
             clearTimeout(timer);
             resolve();
-          });
+          }
+          controller.signal.addEventListener("abort", stop, { once: true });
         }),
       signal: controller.signal,
     });
