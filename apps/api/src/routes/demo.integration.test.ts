@@ -7,7 +7,7 @@ import { loadConfig } from "../config";
 import { createDb } from "../db/client";
 import { runMigrations } from "../db/migrate";
 import { orders } from "../db/schema";
-import { seed, trafficCustomer } from "../db/seed";
+import { seed, seedProducts, trafficCustomer } from "../db/seed";
 import { createMockGateway } from "../payments/mock-gateway";
 
 // Needs the incident-resolver compose stack. Run with `pnpm test:integration`.
@@ -70,6 +70,21 @@ describe("POST /demo/simulate-traffic", () => {
     // request, so it is finished before the next test asks for a burst of its own.
     expect((await simulate({ durationMs: 1_000, intervalMs: 1_000 })).status).toBe(202);
     await settle(300);
+  });
+
+  it("puts ShopLite back to its seed", async () => {
+    await fetch(`${origin}/customers/${trafficCustomer.id}/cart/items`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ productId: seedProducts[0].id, quantity: 2 }),
+    });
+    expect((await loadCart(db, await openCartFor(db, trafficCustomer.id))).items).toHaveLength(1);
+
+    const response = await fetch(`${origin}/demo/reset`, { method: "POST" });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ reseeded: true });
+    expect((await loadCart(db, await openCartFor(db, trafficCustomer.id))).items).toEqual([]);
   });
 
   it("refuses a customer it does not know", async () => {

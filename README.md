@@ -113,6 +113,7 @@ Test cards: any well-formed number is approved; a number ending in `0002` (for e
 | POST | `/customers/:customerId/checkout` | `{card: {number, expMonth, expYear}}` charges the cart. `201` with the order, `402` on decline |
 | GET | `/customers/:customerId/orders` | The customer's orders, newest first |
 | POST | `/demo/simulate-traffic` | `{durationMs?, intervalMs?, customerId?}` sends a burst of empty-cart checkouts at ShopLite itself. See below |
+| POST | `/demo/reset` | Puts ShopLite back to its seed: no carts, orders or payments. What the Incident Resolver's `pnpm demo:reset` calls |
 
 Discount codes in the seed: `SALE10` (10% off), `FLAT5` ($5 off orders of $20 or more), `EXPIRED20` (inactive, rejected).
 
@@ -141,6 +142,10 @@ It answers `202` with the shape of the burst as soon as that is settled and send
 requests in the background, so the button returns at once. One burst runs at a time: a
 second while one is in flight is a `409`, since stacking them would make the ratio
 meaningless. Shutting the API down cancels whatever is still going.
+
+`POST /demo/reset` is the other half of the prop: it cancels any burst and reseeds every
+ShopLite table, which is what `pnpm demo:reset` in the Incident Resolver repository calls
+before it clears the portal's own Tickets.
 
 ## Telemetry
 

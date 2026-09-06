@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppDeps } from "../app";
 import { emptyCart, openCartFor } from "../carts/cart-store";
 import { customers } from "../db/schema";
-import { trafficCustomer } from "../db/seed";
+import { seed, trafficCustomer } from "../db/seed";
 import { planTraffic, sendTraffic, type TrafficPlan, trafficRequestSchema } from "../demo/traffic";
 import { parseBody } from "../http/body";
 
@@ -26,6 +26,17 @@ export async function demoRoutes(app: FastifyInstance, { db }: AppDeps): Promise
 
   app.addHook("onClose", async () => {
     running?.abort();
+  });
+
+  /**
+   * Puts ShopLite back to its seed: five customers, eight products, three discount codes, and
+   * no carts, orders or payments. The Incident Resolver's `pnpm demo:reset` calls this as its
+   * first step, since ShopLite's seed data lives here and nowhere else.
+   */
+  app.post("/demo/reset", async (_request, reply) => {
+    running?.abort();
+    await seed(db);
+    return reply.send({ reseeded: true });
   });
 
   app.post("/demo/simulate-traffic", async (request, reply) => {
