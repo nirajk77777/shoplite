@@ -33,6 +33,9 @@ export default defineConfig({
           exclude: [...configDefaults.exclude],
           testTimeout: 30_000,
           hookTimeout: 60_000,
+          // Every integration file drives the same Postgres and reseeds it, so running two
+          // at once has one file truncating the tables another is mid-request against.
+          fileParallelism: false,
         },
       },
     ],

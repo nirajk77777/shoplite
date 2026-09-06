@@ -30,6 +30,12 @@ export const seedCustomers = [
   },
 ] as const;
 
+/**
+ * Who the demo's traffic generator checks out as. Kept apart from the customers the
+ * demo shops as, so a burst of empty-cart checkouts never disturbs a cart on screen.
+ */
+export const trafficCustomer = seedCustomers[4];
+
 export const seedProducts = [
   {
     id: "00000000-0000-4000-9000-000000000001",

@@ -139,6 +139,15 @@ export async function addItem(
   return "ok";
 }
 
+/**
+ * Drops every line from the cart and brings its totals row back to zero. The demo's
+ * traffic generator uses it to be sure the cart it checks out against is empty.
+ */
+export async function emptyCart(db: Db, cart: OpenCart): Promise<void> {
+  await db.delete(cartItems).where(eq(cartItems.cartId, cart.id));
+  await refreshTotals(db, cart);
+}
+
 /** Drops a product from the cart. */
 export async function removeItem(db: Db, cart: OpenCart, productId: string): Promise<void> {
   await db

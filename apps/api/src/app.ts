@@ -6,6 +6,7 @@ import type { PaymentGateway } from "./payments/mock-gateway";
 import { cartRoutes } from "./routes/cart";
 import { checkoutRoutes } from "./routes/checkout";
 import { customerRoutes } from "./routes/customers";
+import { demoRoutes } from "./routes/demo";
 import { productRoutes } from "./routes/products";
 
 export type AppDeps = {
@@ -34,6 +35,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.register(productRoutes, deps);
   app.register(cartRoutes, deps);
   app.register(checkoutRoutes, deps);
+  app.register(demoRoutes, deps);
 
   return app;
 }

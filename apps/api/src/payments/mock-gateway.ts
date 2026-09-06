@@ -6,6 +6,8 @@ export type ChargeRequest = {
   cardNumber: string;
   expMonth: number;
   expYear: number;
+  /** The statement descriptor the charge appears under on the customer's card. */
+  description: string;
 };
 
 export type DeclineCode = "insufficient_funds" | "invalid_number";

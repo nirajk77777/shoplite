@@ -1,4 +1,4 @@
-import { type CartLine, calculateSubtotal } from "./cart";
+import { type CartLine, calculateSubtotal, lineTotal } from "./cart";
 import { applyDiscount, type DiscountCode } from "./discount";
 
 /** Everything the orders table needs, computed from the cart at checkout time. */
@@ -8,6 +8,8 @@ export type OrderDraft = {
   subtotalCents: number;
   discountCents: number;
   totalCents: number;
+  /** How the charge reads on the customer's card statement. */
+  description: string;
 };
 
 /**
@@ -24,5 +26,19 @@ export function finalizeOrder(lines: CartLine[], discount: DiscountCode | null):
     subtotalCents,
     discountCents: subtotalCents - totalCents,
     totalCents,
+    description: statementDescriptor(snapshot),
   };
+}
+
+/**
+ * How the charge reads on the customer's statement. A statement line has room for
+ * one product, and the one a customer recognises is the one they spent the most
+ * on, so the order is named after that line and counts the rest.
+ */
+export function statementDescriptor(lines: CartLine[]): string {
+  const headline = lines.reduce((most, line) => (lineTotal(line) > lineTotal(most) ? line : most));
+  const others = lines.length - 1;
+  return others === 0
+    ? `SHOPLITE ${headline.productId}`
+    : `SHOPLITE ${headline.productId} +${others}`;
 }

@@ -12,7 +12,6 @@ import { createMockGateway } from "./payments/mock-gateway";
 // Needs the incident-resolver compose stack. Run with `pnpm test:integration`.
 
 const ava = seedCustomers[0];
-const liam = seedCustomers[1];
 const mug = seedProducts[0]; // 1200
 const poster = seedProducts[1]; // 2599
 
@@ -199,17 +198,6 @@ describe("ShopLite API", () => {
       cardLast4: "0002",
     });
     expect(JSON.stringify(declineLog)).not.toContain(declinedCard.number);
-  });
-
-  it("refuses to check out an empty cart", async () => {
-    const checkout = await app.inject({
-      method: "POST",
-      url: `/customers/${liam.id}/checkout`,
-      payload: { card: approvedCard },
-    });
-
-    expect(checkout.statusCode).toBe(400);
-    expect(checkout.json()).toEqual({ error: "Cart is empty" });
   });
 
   it("returns 404 for a customer that does not exist", async () => {

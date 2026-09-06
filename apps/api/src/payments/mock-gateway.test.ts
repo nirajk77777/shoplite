@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { createMockGateway } from "./mock-gateway";
 
 const gateway = createMockGateway();
-const charge = { amountCents: 4499, currency: "USD" as const, expMonth: 12, expYear: 2030 };
+const charge = {
+  amountCents: 4499,
+  currency: "USD" as const,
+  expMonth: 12,
+  expYear: 2030,
+  description: "SHOPLITE poster +1",
+};
 
 describe("mock payment gateway", () => {
   it("approves an ordinary test card and returns a reference", async () => {

@@ -44,13 +44,13 @@ async function runCheckout(
 ): Promise<CheckoutResult> {
   const cart = await openCartFor(db, input.customerId);
   const lines = await loadLines(db, cart.id);
-  if (lines.length === 0) {
+  const discount = await loadDiscount(db, cart.discountCode);
+  const draft = finalizeOrder(lines, discount);
+  if (draft.lines.length === 0) {
     recordCheckoutError("empty_cart");
     return { status: "empty_cart" };
   }
 
-  const discount = await loadDiscount(db, cart.discountCode);
-  const draft = finalizeOrder(lines, discount);
   const last4 = cardLast4(input.card.number);
 
   const charge = await gateway.charge({
@@ -59,6 +59,7 @@ async function runCheckout(
     cardNumber: input.card.number,
     expMonth: input.card.expMonth,
     expYear: input.card.expYear,
+    description: draft.description,
   });
 
   if (charge.status === "declined") {
@@ -77,6 +78,7 @@ async function runCheckout(
         cartId: cart.id,
         amountCents: draft.totalCents,
         cardLast4: last4,
+        description: draft.description,
         declineCode: charge.declineCode,
         declineMessage: charge.message,
       },

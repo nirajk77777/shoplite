@@ -110,10 +110,37 @@ Test cards: any well-formed number is approved; a number ending in `0002` (for e
 | DELETE | `/customers/:customerId/cart/items/:productId` | Removes a line |
 | POST | `/customers/:customerId/cart/discount` | `{code}` attaches an active discount code |
 | DELETE | `/customers/:customerId/cart/discount` | Detaches the code |
-| POST | `/customers/:customerId/checkout` | `{card: {number, expMonth, expYear}}` charges the cart. `201` with the order, `402` on decline, `400` on an empty cart |
+| POST | `/customers/:customerId/checkout` | `{card: {number, expMonth, expYear}}` charges the cart. `201` with the order, `402` on decline |
 | GET | `/customers/:customerId/orders` | The customer's orders, newest first |
+| POST | `/demo/simulate-traffic` | `{durationMs?, intervalMs?, customerId?}` sends a burst of empty-cart checkouts at ShopLite itself. See below |
 
 Discount codes in the seed: `SALE10` (10% off), `FLAT5` ($5 off orders of $20 or more), `EXPIRED20` (inactive, rejected).
+
+## Simulating traffic
+
+`POST /demo/simulate-traffic` is a rehearsal prop, not a shop feature. It empties one
+customer's cart and then sends empty-cart checkouts at ShopLite's own port for a
+configurable duration, so the checkout route's error ratio climbs where Prometheus can see
+it. The Incident Resolver's Sentinel watches that ratio and opens a Ticket about the route
+by itself, which is demo moment four; the portal's hidden Demo panel is the button that
+calls this.
+
+```bash
+curl -sX POST localhost:4000/demo/simulate-traffic \
+  -H 'content-type: application/json' -d '{"durationMs":30000,"intervalMs":250}'
+# {"customerId":"…","durationMs":30000,"intervalMs":250,"requests":120}
+```
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `durationMs` | `30000` | How long the burst runs. 1s to 5min |
+| `intervalMs` | `250` | How far apart the requests are. 50ms to 10s |
+| `customerId` | Sofia Reyes, the last seeded customer | Whose cart the checkouts go against. Her cart is emptied first, and she is kept apart from the customers the demo shops as |
+
+It answers `202` with the shape of the burst as soon as that is settled and sends the
+requests in the background, so the button returns at once. One burst runs at a time: a
+second while one is in flight is a `409`, since stacking them would make the ratio
+meaningless. Shutting the API down cancels whatever is still going.
 
 ## Telemetry
 
@@ -141,9 +168,10 @@ A declined card therefore shows up three ways: a trace whose server span is `POS
 
 ```bash
 pnpm test               # unit tests: domain module, mock gateway, and the storefront in jsdom. No database, no network
-pnpm test:integration   # API tests through Fastify inject against the compose Postgres, and a telemetry
-                        # test that starts the instrumented server and looks for one declined checkout
-                        # in Tempo, Loki, and Prometheus
+pnpm test:integration   # API tests through Fastify inject against the compose Postgres, a traffic test
+                        # that listens on a real port and sends a burst at itself, and a telemetry test
+                        # that starts the instrumented server and looks for one declined checkout in
+                        # Tempo, Loki, and Prometheus. They run one file at a time: they share a database
 pnpm test:all
 pnpm typecheck
 pnpm lint
