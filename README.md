@@ -1,8 +1,8 @@
 # ShopLite
 
-A small e-commerce API built as the product that [Incident Resolver](https://github.com/nirajk77777/incident-resolver) investigates. Customers are picked from seed data, add products to a cart, apply a discount code, and check out through the HTTP API against a mock payment gateway. Fix pull requests from the agent target this repository.
+A small e-commerce store built as the product that [Incident Resolver](https://github.com/nirajk77777/incident-resolver) investigates. Customers are picked from seed data, add products to a cart, apply a discount code, and check out against a mock payment gateway, through the HTTP API or the storefront. Fix pull requests from the agent target this repository.
 
-Stack: TypeScript, Node 22, pnpm workspaces, Fastify, Drizzle, Postgres, OpenTelemetry, vitest, Biome.
+Stack: TypeScript, Node 22, pnpm workspaces, Fastify, Drizzle, Postgres, OpenTelemetry, React, Vite, vitest, Biome.
 
 ## Layout
 
@@ -16,6 +16,14 @@ apps/api/
   src/db/          Drizzle schema, client, migrator, seed
   src/telemetry/   OpenTelemetry SDK setup (loaded with --import) and business metric counters
   drizzle/         SQL migrations
+apps/web/
+  src/api/         typed client over fetch; a failed request becomes an ApiError carrying the trace id
+  src/app/         providers: API, signed-in customer, cart, toasts; the useLoad hook
+  src/components/  header with the cart tag, line list, receipt, toasts, product image
+  src/pages/       catalog, cart, checkout
+  src/lib/         money and item-count formatting
+  src/test/        vitest setup for the jsdom project
+  public/images/   product illustrations the seed's imageUrl values point at
 ```
 
 ## Environment
@@ -30,6 +38,8 @@ ShopLite has no compose file. It connects to the Postgres and the OTLP collector
 | `HOST` | `0.0.0.0` | API bind address. |
 | `LOG_LEVEL` | `info` | pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`. |
 | `OTEL_SERVICE_NAME` | `shoplite-api` | Service name on every trace, metric, and log. |
+| `WEB_PORT` | `4001` | Storefront dev server port. |
+| `SHOPLITE_API_URL` | `http://localhost:4000` | Where the storefront dev server forwards `/api/*` requests. |
 
 The standard `OTEL_*` variables also apply, for example `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BLRP_SCHEDULE_DELAY`, and `OTEL_METRIC_EXPORT_INTERVAL`.
 
@@ -41,8 +51,19 @@ Requires Node 22 (see `.nvmrc`), pnpm 10, and the incident-resolver compose stac
 pnpm install
 pnpm db:migrate        # creates the shoplite schema tables
 pnpm db:seed           # five customers, eight products, three discount codes. Safe to rerun; it resets the tables
-pnpm dev               # API on http://localhost:4000
+pnpm dev               # API on http://localhost:4000, storefront on http://localhost:4001
 ```
+
+## Storefront
+
+`apps/web` is a Vite and React app on port 4001 with three pages: the catalog, the cart, and checkout. There is no authentication: a "Signed in as" picker in the header chooses one of the seeded customers, and the choice is remembered in the browser.
+
+The browser calls `/api/...` and the dev server proxies that to the API, so the `x-trace-id` response header arrives unchanged and the API needs no CORS.
+
+Two things are deliberate:
+
+- The cart tag in the header shows the count and total the API reads from the `cart_totals` row. It never sums the lines, so when that row goes stale after removing an item, the tag shows the wrong number while the cart page shows the right lines. That is how a tester notices the stale total bug.
+- A failed checkout shows a toast with the API's own message (`Checkout failed`, nothing about the card) and the trace id from the response header as a reference the customer can quote. Paste it into Tempo or Loki as described under Telemetry to see the request.
 
 ## Checkout with curl
 
@@ -107,7 +128,7 @@ A declined card therefore shows up three ways: a trace whose server span is `POS
 ## Tests
 
 ```bash
-pnpm test               # unit tests: domain module and mock gateway. No database, no network
+pnpm test               # unit tests: domain module, mock gateway, and the storefront in jsdom. No database, no network
 pnpm test:integration   # API tests through Fastify inject against the compose Postgres, and a telemetry
                         # test that starts the instrumented server and looks for one declined checkout
                         # in Tempo, Loki, and Prometheus
@@ -116,4 +137,4 @@ pnpm typecheck
 pnpm lint
 ```
 
-Unit tests end in `.test.ts`, integration tests in `.integration.test.ts`. The unit suite is what the Incident Resolver code agent runs and extends inside a Workspace clone, so it must keep working with nothing but `pnpm install`.
+Unit tests end in `.test.ts` (or `.test.tsx` for the storefront, which run in jsdom), integration tests in `.integration.test.ts`. The unit suite is what the Incident Resolver code agent runs and extends inside a Workspace clone, so it must keep working with nothing but `pnpm install`.

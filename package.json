@@ -12,7 +12,7 @@
     "dev": "pnpm -r --parallel --if-present dev",
     "db:migrate": "pnpm --filter @shoplite/api db:migrate",
     "db:seed": "pnpm --filter @shoplite/api db:seed",
-    "test": "vitest run --project unit",
+    "test": "vitest run --project unit --project web",
     "test:integration": "vitest run --project integration",
     "test:all": "vitest run",
     "lint": "biome check .",
@@ -23,6 +23,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.12",
     "@types/node": "22.20.1",
+    "jsdom": "30.0.1",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
