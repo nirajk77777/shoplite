@@ -11,6 +11,7 @@ import { formatCents } from "../lib/money";
 const thisYear = new Date().getFullYear();
 const years = Array.from({ length: 10 }, (_, offset) => thisYear + offset);
 const months = Array.from({ length: 12 }, (_, index) => index + 1);
+const cardNumberPattern = "[0-9]{12,19}";
 
 export function CheckoutPage() {
   const { cart, checkout } = useCart();
@@ -71,6 +72,9 @@ export function CheckoutPage() {
                 inputMode="numeric"
                 autoComplete="cc-number"
                 placeholder="4242 4242 4242 4242"
+                pattern={cardNumberPattern}
+                minLength={12}
+                maxLength={19}
                 required
               />
             </label>

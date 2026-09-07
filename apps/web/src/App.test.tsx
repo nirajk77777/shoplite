@@ -137,6 +137,21 @@ describe("header cart badge", () => {
   });
 });
 
+describe("checkout validation", () => {
+  it("rejects card numbers with non-digits or invalid lengths before attempting payment", async () => {
+    const api = fakeApi({ getCart: vi.fn(async () => cartWithMug) });
+    renderApp(api, "/checkout");
+    const user = userEvent.setup();
+
+    const cardNumber = await screen.findByLabelText("Card number");
+    await user.type(cardNumber, "abcd1234");
+    await user.click(screen.getByRole("button", { name: "Pay $12.00" }));
+
+    expect(cardNumber).toBeInvalid();
+    expect(api.checkout).not.toHaveBeenCalled();
+  });
+});
+
 describe("checkout failure", () => {
   it("shows the generic message and the trace id from the failed request", async () => {
     const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
