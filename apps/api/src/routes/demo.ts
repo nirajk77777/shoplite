@@ -64,7 +64,9 @@ export async function demoRoutes(app: FastifyInstance, { db }: AppDeps): Promise
       await emptyCart(db, await openCartFor(db, customer.id));
 
       const plan = planTraffic(body);
-      const origin = `${request.protocol}://${request.host}`;
+      // Back at this server, under whatever prefix these routes are mounted on: none on a
+      // laptop, /api in the deployed container, where the root belongs to the storefront.
+      const origin = `${request.protocol}://${request.host}${app.prefix}`;
       void run(plan, customer.id, origin, controller).finally(() => {
         if (running === controller) running = undefined;
       });

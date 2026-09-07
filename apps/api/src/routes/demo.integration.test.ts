@@ -18,14 +18,21 @@ import { createMockGateway } from "../payments/mock-gateway";
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("POST /demo/simulate-traffic", () => {
+  /** Requests that reached no route at all — a burst sent to the wrong place lands here. */
+  let missed = 0;
   const db = createDb(loadConfig().databaseUrl);
   let app: FastifyInstance;
   let origin: string;
 
   beforeAll(async () => {
     await runMigrations(db);
-    app = buildApp({ db, gateway: createMockGateway(), logLevel: "fatal" });
-    origin = await app.listen({ port: 0, host: "127.0.0.1" });
+    // Mounted under a prefix, as the deployed container mounts it: the burst has to find
+    // its way back to the checkout route through that prefix, not to the root.
+    app = buildApp({ db, gateway: createMockGateway(), logLevel: "fatal", apiPrefix: "/api" });
+    app.addHook("onResponse", async (_request, reply) => {
+      if (reply.statusCode === 404) missed += 1;
+    });
+    origin = `${await app.listen({ port: 0, host: "127.0.0.1" })}/api`;
   });
 
   beforeEach(async () => {
@@ -60,6 +67,8 @@ describe("POST /demo/simulate-traffic", () => {
 
     await settle(1_800);
 
+    // Every request found the checkout route: none was answered as unrouted.
+    expect(missed).toBe(0);
     // Every checkout in the burst was against an empty cart, so none of them bought anything.
     const bought = await db.select().from(orders).where(eq(orders.customerId, trafficCustomer.id));
     expect(bought).toEqual([]);
