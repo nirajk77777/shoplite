@@ -29,10 +29,13 @@ export function serveStorefront(app: FastifyInstance, options: StorefrontOptions
   app.register(fastifyStatic, { root: webDistDir, wildcard: false });
 
   if (portalApiUrl) {
+    // The proxy ignores any path in `upstream`, so a portal reached under a prefix — the
+    // deployed one answers at /api — has that prefix carried over as the rewrite instead.
+    const portal = new URL(portalApiUrl);
     app.register(fastifyProxy, {
-      upstream: portalApiUrl,
+      upstream: portal.origin,
       prefix: PORTAL_PREFIX,
-      rewritePrefix: "",
+      rewritePrefix: portal.pathname.replace(/\/$/, ""),
     });
   }
 
