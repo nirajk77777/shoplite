@@ -41,7 +41,9 @@ ShopLite has no compose file. It connects to the Postgres and the OTLP collector
 | `OTEL_SERVICE_NAME` | `shoplite-api` | Service name on every trace, metric, and log. |
 | `WEB_PORT` | `4001` | Storefront dev server port. |
 | `SHOPLITE_API_URL` | `http://localhost:4000` | Where the storefront dev server forwards `/api/*` requests. |
-| `PORTAL_API_URL` | `http://localhost:5000` | Where the storefront dev server forwards `/portal/*` requests: the Incident Resolver portal API. |
+| `PORTAL_API_URL` | `http://localhost:5000` | Where `/portal/*` is forwarded: the Incident Resolver portal API. The dev server reads it locally; the deployed container reads it too, and proxies the same path itself. |
+| `WEB_DIST_DIR` | unset | Container only. Path to the built storefront. Setting it makes the API process serve the pages as well, and moves the store's own routes under `/api`. |
+| `SEED_ON_START` | unset | Container only. `true` truncates and reseeds the store on start. |
 
 The standard `OTEL_*` variables also apply, for example `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BLRP_SCHEDULE_DELAY`, and `OTEL_METRIC_EXPORT_INTERVAL`.
 
@@ -76,7 +78,7 @@ Every error toast carries a **Report a problem** button. Pressing it opens a cus
 
 The whole loop needs the portal running (`pnpm portal` in the incident-resolver repository). Without it the button says support could not be reached, inside the toast, and My tickets says the same on the page while it keeps trying; the rest of the store is unaffected.
 
-Both `/api` and `/portal` are dev-server proxies, so `pnpm dev` is what the storefront is built to run under. A `pnpm preview` build has neither proxy, and neither service sends CORS headers, so a previewed build reaches nothing.
+Both `/api` and `/portal` are dev-server proxies, so `pnpm dev` is what the storefront is built to run under locally. A `pnpm preview` build has neither proxy, and neither service sends CORS headers, so a previewed build reaches nothing. The container under [Deploying](#deploying) is the other way to run a build: there the API process serves the pages and answers both paths itself, so the same relative URLs work without a proxy in front.
 
 ## Checkout with curl
 
@@ -169,6 +171,53 @@ Business counters, defined in `src/telemetry/metrics.ts`:
 | `discount_applied_total` | `code` | a discount code is attached to a cart |
 
 A declined card therefore shows up three ways: a trace whose server span is `POST /customers/:customerId/checkout` with status 402, a warn log line `payment declined by gateway: insufficient_funds` with the same trace id and `declineCode` as a field, and `checkout_errors_total{reason="declined"}` going up. The incident-resolver repository provisions a Grafana dashboard for all of this at `http://localhost:3000/d/shoplite`.
+
+## Deploying
+
+The `Dockerfile` at the root builds **one image running one container**: the API process
+serves the built storefront alongside its own routes and forwards `/portal/*` to Incident
+Resolver, which is the job the Vite dev server does locally. Everything is behind a single
+origin, so there is no CORS, no second service, and no proxy to configure in front.
+
+The one thing that changes inside the container is where the store's own routes live. With
+`WEB_DIST_DIR` set they move under `/api`, leaving the root for the storefront's pages —
+so every path in [Routes](#routes) below gains an `/api` prefix, except `/health`, which
+stays at the root because it answers for the process rather than for the store.
+
+```bash
+docker build -t shoplite .
+docker run -p 4000:4000 \
+  -e DATABASE_URL=postgres://user:pass@host:5432/incident_resolver \
+  -e OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318 \
+  -e PORTAL_API_URL=https://portal.example.com \
+  shoplite
+```
+
+Start-up runs `docker-entrypoint.sh`: it applies migrations, which is idempotent and safe
+on every boot, then execs the server as PID 1 so a `docker stop` reaches its `SIGTERM`
+handler and the connection pool closes. Seeding is not part of that — it `TRUNCATE`s every
+ShopLite table — so pass `SEED_ON_START=true` for a first boot against an empty database
+and unset it again afterwards.
+
+`OTEL_EXPORTER_OTLP_ENDPOINT` defaults to `localhost:4318`, which inside a container is the
+container itself. Point it at a reachable collector or the log fills with `ECONNREFUSED`
+and shutdown stalls for eight seconds waiting to flush. To run without a collector at all,
+set the standard `OTEL_SDK_DISABLED=true` instead.
+
+### On Coolify
+
+Create the application from this repository with the **Dockerfile** build pack — not
+Railpack or Nixpacks, which read the root `package.json`, find no `build` or `start`
+script, and cannot install a pnpm workspace from a subdirectory anyway. Then:
+
+- **Base directory** `/` and **Port** `4000`.
+- Add a **Postgres** resource and point `DATABASE_URL` at it. ShopLite owns the `shoplite`
+  schema inside that database, so it can share one with Incident Resolver.
+- Set `OTEL_EXPORTER_OTLP_ENDPOINT` and `PORTAL_API_URL` to the deployed collector and
+  portal. `WEB_DIST_DIR`, `PORT`, and `HOST` are already set by the Dockerfile.
+- Set `SEED_ON_START=true` for the first deploy only.
+
+The image declares a `HEALTHCHECK` against `/health`.
 
 ## Tests
 

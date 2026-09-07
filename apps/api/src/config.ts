@@ -4,6 +4,11 @@ import { z } from "zod";
  * ShopLite has no compose file of its own. It connects to the Postgres and the
  * OTLP collector that the incident-resolver repository's docker compose runs,
  * and reads both locations from the environment.
+ *
+ * Two settings decide whether this process is the API alone or the whole storefront.
+ * Locally the Vite dev server serves the HTML and proxies to this API, so both are
+ * unset. In the deployed container there is no Vite, so `WEB_DIST_DIR` points at the
+ * built storefront and `PORTAL_API_URL` takes over the proxying Vite was doing.
  */
 const configSchema = z
   .object({
@@ -15,6 +20,8 @@ const configSchema = z
     PORT: z.coerce.number().int().positive().default(4000),
     HOST: z.string().min(1).default("0.0.0.0"),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+    WEB_DIST_DIR: z.string().min(1).optional(),
+    PORTAL_API_URL: z.url().optional(),
   })
   .transform((env) => ({
     databaseUrl: env.DATABASE_URL,
@@ -22,6 +29,8 @@ const configSchema = z
     port: env.PORT,
     host: env.HOST,
     logLevel: env.LOG_LEVEL,
+    webDistDir: env.WEB_DIST_DIR,
+    portalApiUrl: env.PORTAL_API_URL,
   }));
 
 export type Config = z.output<typeof configSchema>;
