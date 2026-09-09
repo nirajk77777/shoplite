@@ -36,6 +36,10 @@ export function finalizeOrder(lines: CartLine[], discount: DiscountCode | null):
  * on, so the order is named after that line and counts the rest.
  */
 export function statementDescriptor(lines: CartLine[]): string {
+  if (lines.length === 0) {
+    return "SHOPLITE";
+  }
+
   const headline = lines.reduce((most, line) => (lineTotal(line) > lineTotal(most) ? line : most));
   const others = lines.length - 1;
   return others === 0

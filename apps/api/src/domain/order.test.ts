@@ -34,4 +34,14 @@ describe("finalizeOrder", () => {
 
     expect(order.discountCode).toBe("SALE10");
   });
+
+  it("handles an empty cart gracefully", () => {
+    const order = finalizeOrder([], null);
+
+    expect(order.lines).toEqual([]);
+    expect(order.subtotalCents).toBe(0);
+    expect(order.discountCents).toBe(0);
+    expect(order.totalCents).toBe(0);
+    expect(order.description).toBe("SHOPLITE");
+  });
 });
