@@ -34,4 +34,19 @@ describe("finalizeOrder", () => {
 
     expect(order.discountCode).toBe("SALE10");
   });
+
+  it("keeps the order subtotal as the pre-discount line sum and applies the discount once", () => {
+    const candle: CartLine = { productId: "candle", unitPriceCents: 1800, quantity: 1 };
+    const order = finalizeOrder([mug, candle], {
+      code: "SALE10",
+      kind: "percent",
+      value: 10,
+      minSubtotalCents: 0,
+      active: true,
+    });
+
+    expect(order.subtotalCents).toBe(4200);
+    expect(order.discountCents).toBe(420);
+    expect(order.totalCents).toBe(3780);
+  });
 });
