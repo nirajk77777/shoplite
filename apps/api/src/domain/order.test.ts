@@ -23,6 +23,18 @@ describe("finalizeOrder", () => {
     expect(order.lines).toEqual([{ productId: "mug", unitPriceCents: 1200, quantity: 2 }]);
   });
 
+  it("returns an empty-cart draft without throwing", () => {
+    expect(() => finalizeOrder([], null)).not.toThrow();
+    expect(finalizeOrder([], null)).toMatchObject({
+      lines: [],
+      discountCode: null,
+      subtotalCents: 0,
+      discountCents: 0,
+      totalCents: 0,
+      description: "SHOPLITE",
+    });
+  });
+
   it("records which code was used", () => {
     const order = finalizeOrder([mug], {
       code: "SALE10",
