@@ -18,14 +18,14 @@ export type OrderDraft = {
  */
 export function finalizeOrder(lines: CartLine[], discount: DiscountCode | null): OrderDraft {
   const snapshot = lines.map((line) => ({ ...line }));
-  const subtotalCents = calculateSubtotal(snapshot, discount);
-  const totalCents = applyDiscount(subtotalCents, discount);
+  const subtotalCents = calculateSubtotal(snapshot);
+  const totalBeforeDiscount = applyDiscount(subtotalCents, discount);
   return {
     lines: snapshot,
     discountCode: discount?.code ?? null,
     subtotalCents,
-    discountCents: subtotalCents - totalCents,
-    totalCents,
+    discountCents: subtotalCents - totalBeforeDiscount,
+    totalCents: totalBeforeDiscount,
     description: statementDescriptor(snapshot),
   };
 }
