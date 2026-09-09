@@ -18,7 +18,7 @@ export type OrderDraft = {
  */
 export function finalizeOrder(lines: CartLine[], discount: DiscountCode | null): OrderDraft {
   const snapshot = lines.map((line) => ({ ...line }));
-  const subtotalCents = calculateSubtotal(snapshot, discount);
+  const subtotalCents = calculateSubtotal(snapshot);
   const totalCents = applyDiscount(subtotalCents, discount);
   return {
     lines: snapshot,
