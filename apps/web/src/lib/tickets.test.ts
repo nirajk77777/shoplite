@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReporterTicket } from "../api/portal";
-import { isSettled, progressOf, ticketFor } from "./tickets";
+import { isSettled, progressOf, reportFrom, ticketFor } from "./tickets";
 
 const ticket = (over: Partial<ReporterTicket>): ReporterTicket => ({
   id: "70000000-0000-4000-8000-000000000001",
@@ -58,5 +58,29 @@ describe("ticketFor", () => {
 
   it("names a page it has no words for by its path", () => {
     expect(ticketFor({ title: "Gone", page: "/somewhere/new" }).body).toContain("/somewhere/new");
+  });
+});
+
+describe("reportFrom", () => {
+  it("keeps the customer's own line as the title and their story as the body", () => {
+    expect(
+      reportFrom({
+        summary: "  Product pictures are not loading ",
+        details: "Every picture on the catalog is a grey box since this morning.\n",
+      }),
+    ).toEqual({
+      title: "Product pictures are not loading",
+      body: "Every picture on the catalog is a grey box since this morning.",
+    });
+  });
+
+  it("names the page they noticed it on the way a reported failure would", () => {
+    expect(
+      reportFrom({
+        summary: "Cart total looks wrong",
+        details: "It says two items.",
+        page: "/cart",
+      }).body,
+    ).toBe("It says two items. I noticed this on the cart page.");
   });
 });

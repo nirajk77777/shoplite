@@ -65,6 +65,10 @@ export function MyTicketsPage() {
         Anything you have reported to us, and what we found out. We answer here as soon as we know
         what went wrong.
       </p>
+      <p className="tickets-report">
+        Something not working, but no error message to report it from?{" "}
+        <Link to="/report">Report a problem</Link>.
+      </p>
 
       {failed && <p className="tickets-failed">{failed}</p>}
 
@@ -73,9 +77,14 @@ export function MyTicketsPage() {
       {tickets?.length === 0 && (
         <div className="empty">
           <p>Nothing reported yet.</p>
-          <Link to="/" className="button button--primary">
-            Browse the shop
-          </Link>
+          <div className="empty__actions">
+            <Link to="/" className="button button--primary">
+              Browse the shop
+            </Link>
+            <Link to="/report" className="button">
+              Report a problem
+            </Link>
+          </div>
         </div>
       )}
 

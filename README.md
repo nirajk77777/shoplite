@@ -21,7 +21,7 @@ apps/web/
                    become an ApiError carrying the trace id, and the Incident Resolver portal
   src/app/         providers: API, portal, signed-in customer, cart, toasts; the useLoad hook
   src/components/  header with the cart tag, line list, receipt, toasts, product image
-  src/pages/       catalog, cart, checkout, my tickets
+  src/pages/       catalog, cart, checkout, my tickets, report a problem
   src/lib/         money and item-count formatting; Tickets in the customer's words
   src/test/        vitest setup for the jsdom project
   public/images/   product illustrations the seed's imageUrl values point at
@@ -61,7 +61,7 @@ eight products, three discount codes. The seed is safe to rerun on its own; it r
 
 ## Storefront
 
-`apps/web` is a Vite and React app on port 4001 with four pages: the catalog, the cart, checkout, and "My tickets". There is no authentication: a "Signed in as" picker in the header chooses one of the seeded customers, and the choice is remembered in the browser.
+`apps/web` is a Vite and React app on port 4001 with five pages: the catalog, the cart, checkout, "My tickets", and "Report a problem". There is no authentication: a "Signed in as" picker in the header chooses one of the seeded customers, and the choice is remembered in the browser.
 
 The browser calls `/api/...` and the dev server proxies that to the API, so the `x-trace-id` response header arrives unchanged and the API needs no CORS. `/portal/...` is proxied the same way to the Incident Resolver portal API (`PORTAL_API_URL`, 5000 by default), which is the only other service the storefront talks to.
 
@@ -73,6 +73,8 @@ Two things are deliberate:
 ### Reporting a problem
 
 Every error toast carries a **Report a problem** button. Pressing it opens a customer Ticket in the portal with the signed-in customer's email, the trace id of the request that failed, and what they were doing in their own words — "I was paying for my cart on the checkout page when the store showed \"Checkout failed\"." — so nothing has to be retyped and the agent can jump straight to the trace. The toast then becomes the confirmation, with a link to My tickets.
+
+Not everything fails loudly. **Report a problem** in the footer of every page, and on My tickets, opens `/report` for the rest: pictures that do not load, a total that looks wrong, a page that is slower than it was. The customer writes what went wrong in a line, tells the story underneath, and can name the page they noticed it on; the Ticket is opened as the signed-in customer with no trace id, so the agent starts from the words and the store's recent errors rather than from one request.
 
 **My tickets** (`/tickets`) lists that customer's Tickets, how far along each one is, and the Reply once the agent has written it. It re-reads the portal every few seconds while anything is still open and stops once everything has closed. Delivery of the Reply is this page: the portal's email step is a stub that logs.
 

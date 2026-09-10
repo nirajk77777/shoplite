@@ -209,6 +209,66 @@ describe("reporting a problem", () => {
   });
 });
 
+describe("reporting without an error", () => {
+  it("files a Ticket from the report page in the customer's words, with no trace id", async () => {
+    const portal = fakePortal();
+    renderApp(fakeApi(), "/report", portal);
+    const user = userEvent.setup();
+
+    await user.type(
+      await screen.findByLabelText("What went wrong?"),
+      "Product pictures are not loading",
+    );
+    await user.type(
+      screen.getByLabelText("Tell us more"),
+      "Every picture on the catalog is a grey box since this morning.",
+    );
+    await user.selectOptions(screen.getByLabelText("Where did you notice it?"), "/");
+    await user.click(screen.getByRole("button", { name: "Report it" }));
+
+    await waitFor(() =>
+      expect(portal.openTicket).toHaveBeenCalledWith({
+        reporterEmail: ava.email,
+        title: "Product pictures are not loading",
+        body: "Every picture on the catalog is a grey box since this morning. I noticed this on the shop page.",
+      }),
+    );
+    // Then the customer is where the Reply will arrive.
+    expect(await screen.findByRole("heading", { name: "My tickets" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/looking into it/i);
+  });
+
+  it("keeps the form, and says why, when the portal cannot be reached", async () => {
+    const portal = fakePortal({
+      openTicket: vi.fn(async () => {
+        throw new Error("Support is not reachable (503)");
+      }),
+    });
+    renderApp(fakeApi(), "/report", portal);
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText("What went wrong?"), "Pictures");
+    await user.type(screen.getByLabelText("Tell us more"), "Grey boxes.");
+    await user.click(screen.getByRole("button", { name: "Report it" }));
+
+    expect(await screen.findByText(/support is not reachable/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Report a problem" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Report it" })).toBeEnabled();
+  });
+
+  it("is reachable from the footer of every page and from My tickets", async () => {
+    renderApp(fakeApi(), "/");
+    const footerLink = await screen.findByRole("link", { name: /report a problem/i });
+    expect(footerLink).toHaveAttribute("href", "/report");
+
+    renderApp(fakeApi(), "/tickets");
+    expect(await screen.findByText(/nothing reported yet/i)).toBeInTheDocument();
+    const links = screen.getAllByRole("link", { name: /report a problem/i });
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    for (const link of links) expect(link).toHaveAttribute("href", "/report");
+  });
+});
+
 describe("My tickets", () => {
   const closedTicket: ReporterTicket = {
     ...openedTicket,

@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router";
+import { Link, Route, Routes } from "react-router";
 import type { ShopLiteApi } from "./api/client";
 import type { PortalApi } from "./api/portal";
 import { ApiProvider } from "./app/ApiContext";
@@ -12,6 +12,7 @@ import { CartPage } from "./pages/CartPage";
 import { CatalogPage } from "./pages/CatalogPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import { MyTicketsPage } from "./pages/MyTicketsPage";
+import { ReportPage } from "./pages/ReportPage";
 
 /** The storefront. Expects to be rendered inside a router. */
 export function App({ api, portal }: { api: ShopLiteApi; portal: PortalApi }) {
@@ -28,10 +29,12 @@ export function App({ api, portal }: { api: ShopLiteApi; portal: PortalApi }) {
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
                   <Route path="/tickets" element={<MyTicketsPage />} />
+                  <Route path="/report" element={<ReportPage />} />
                 </Routes>
               </main>
               <footer className="foot">
                 <span>ShopLite is a demo store. Nothing ships, nothing is charged.</span>
+                <Link to="/report">Something wrong? Report a problem</Link>
               </footer>
               <Toasts />
             </CartProvider>

@@ -1101,3 +1101,52 @@ select.input {
     transition: none;
   }
 }
+
+/* Report a problem: the page for what never failed loudly enough to be a toast. */
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 560px;
+}
+.report__fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+textarea.input {
+  font: inherit;
+  color: inherit;
+  line-height: 1.5;
+  min-height: 140px;
+  resize: vertical;
+}
+.report__hint {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  max-width: 60ch;
+}
+.tickets-report {
+  margin: -16px 0 28px;
+  color: var(--ink-soft);
+}
+.empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
+}
+.foot a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
